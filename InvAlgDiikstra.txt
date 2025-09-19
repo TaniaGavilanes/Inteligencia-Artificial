@@ -1,0 +1,67 @@
+## ¿Qué es el algoritmo de Dijkstra?
+
+Dijkstra es un algoritmo para encontrar caminos más cortos desde un nodo origen hacia todos los demás nodos en un grafo con pesos no negativos en sus aristas. Fue propuesto por **Edsger W. Dijkstra** en 1956 y publicado en 1959. ([Wikipedia][1])
+
+Se utiliza cuando quieres saber la mínima distancia (o costo) desde un punto a todos los otros puntos, o hasta un punto específico si interrumpes el algoritmo cuando llegas al destino. ([pages.cs.wisc.edu][2])
+
+
+
+## ¿Cómo funciona?
+
+Un pseudocódigo simplificado:
+
+1. Inicializar todas las distancias a “infinito” excepto al nodo origen, que se pone distancia 0. ([cp-algorithms.com][3])
+2. Crear un conjunto de nodos no visitados.
+3. Mientras haya nodos no visitados:
+
+   * Escoger el nodo no visitado con la distancia menor (mínima) desde el origen.
+   * Marcarlo como visitado.
+   * Para cada vecino de ese nodo, calcular la distancia posible pasando por ese nodo (“relajar” la arista):
+     si la distancia obtenida es menor que la actual, actualizarla. ([cp-algorithms.com][3])
+4. Al final, tienes el valor de la distancia mínima para todos los nodos alcanzables. ([cp-algorithms.com][3])
+
+
+## Restricciones / condiciones necesarias
+
+* No funciona con aristas de peso negativo: Si hay pesos negativos, hay riesgo de que una “ruta más corta” se descubra después de que ya se haya marcado un nodo como definitivo, lo cual rompe la propiedad de optimalidad. ([Wikipedia][1])
+* El grafo debe estar conectado (o al menos, los nodos de interés sean alcanzables). Si hay nodos no alcanzables, sus distancias quedan como “infinito”. ([cp-algorithms.com][3])
+
+
+## Complejidad
+
+Depende de qué estructura uses para manejar los nodos y la operación de “extraer el nodo con la distancia mínima” y de “actualizar distancias”.
+
+| Estructura usada                                   | Complejidad de tiempo típica | Notas                                                                                                             |
+| -------------------------------------------------- | ---------------------------- | ----------------------------------------------------------------------------------------------------------------- |
+| Lista / array simple + selección lineal del mínimo | $O(V^2)$                     | Bueno para grafos densos, donde hay muchas aristas; no eficiente en grafos muy grandes. ([cp-algorithms.com][3])  |
+| Cola de prioridad (min-heap binario)               | $O((V+E)\log V)$             | Mucho mejor si tienes muchos vértices y pocas aristas; se mejora al usar estructuras más avanzadas. ([Medium][4]) |
+| Montículo Fibonacci (Fibonacci heap)               | $O(E + V \log V)$            | Teóricamente óptimo para ciertos usos; más complejo de implementar. ([pages.cs.wisc.edu][2])                      |
+
+Complejidad espacial (memoria) suele ser **O(V + E)**, principalmente para almacenar el grafo, las distancias, y los nodos visitados / no visitados. ([cp-algorithms.com][3])
+
+
+
+##Aplicaciones
+
+* Redes de telecomunicaciones / routing: para encontrar rutas óptimas entre routers.
+* GPS / Sistemas de navegación**: rutas más cortas entre ubicaciones.
+* Juegos: cálculo de camino en mapas cuando los costos de desplazamiento varían (terreno, obstáculos).
+* Análisis de grafos / redes sociales: determinar distancias “mínimas” entre nodos (usuarios, ciudades, etc.). ([pages.cs.wisc.edu][2])
+
+
+
+## Comparaciones con otros algoritmos
+
+* A\*: usa heurísticas (estimaciones) para guiar la búsqueda; puede ser más rápido si la heurística es buena. Dijkstra es “heurística = 0”, básicamente.
+* Bellman-Ford: permite aristas con peso negativo, pero su complejidad suele ser peor: $O(VE)$.
+* Floyd-Warshall: para todos los pares de nodos, no solo desde una fuente; más costoso para grafos grandes.
+
+
+
+## Referencias
+[1]: https://es.wikipedia.org/wiki/Algoritmo_de_Dijkstra?utm_source=chatgpt.com "Algoritmo de Dijkstra"
+[2]: https://pages.cs.wisc.edu/~jsingh/?utm_source=chatgpt.com "Dijkstra's Algorithm"
+[3]: https://cp-algorithms.com/graph/dijkstra.html?utm_source=chatgpt.com "Dijkstra - finding shortest paths from given vertex"
+[4]: https://medium.com/%40vikramsetty169/time-complexity-of-dijkstras-algorithm-ed4a068e1633?utm_source=chatgpt.com "Time Complexity Analysis of Dijkstra's Algorithm"
+[5]: https://en.wikipedia.org/wiki/Dijkstra%27s_algorithm?utm_source=chatgpt.com "Dijkstra's algorithm"
+[6]: https://www.w3schools.com/dsa/dsa_algo_graphs_dijkstra.php?utm_source=chatgpt.com "DSA Dijkstra's Algorithm"
