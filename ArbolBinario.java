@@ -40,7 +40,6 @@ class Arbol {
         } else if (nombre.compareToIgnoreCase(actual.nombre) > 0) {
             actual.derecha = insertarRec(actual.derecha, nombre);
         }
-        // Si es igual, no insertamos duplicados
         return actual;
     }
 
@@ -60,7 +59,7 @@ class Arbol {
         }
     }
 
-    // Método imprimirArbol (inorden)
+    // Método imprimirArbol
     public void imprimirArbol() {
         imprimirInOrden(raiz);
         System.out.println();
@@ -75,7 +74,7 @@ class Arbol {
     }
 }
 
-// Clase principal (no es necesario llamarla Main)
+// Clase principal 
 public class ArbolBinario {
     public static void main(String[] args) {
         Arbol arbol = new Arbol();
@@ -104,3 +103,4 @@ public class ArbolBinario {
         System.out.println("¿El árbol está vacío?: " + arbol.vacio());
     }
 }
+
