@@ -1,0 +1,406 @@
+
+
+PASO 1:
+Carpeta1: DataSet (banco de imagenes) y cada clase es una persona
+
+Se crea una carpetat por cada clase que se quiera que el RF reconozca
+
+PASO 2: 
+(Carpeta 2: SRC/dataset/procesar_imagenes) ejecutar el script para Procesar_imagenes del raw/ y guardarlas en processed/:
+este script toma las imagenes originales, detecta los rostros, los recorta, alinea y redimensiona a un tamaño estandar.
+NOTA: aqui utilizamos cv2, que él nos proporcionó (como base).
+
+El proceso es:
+1: Detectar el rostro con MTCNN (Redes Convolucionales en Cascada Multitarea)
+2: obtiene los puntos de los ojos
+3: calcula el angulo de inclinación
+4: rota para alinear los ojos horizontalmente
+5: recorta y redimensiona
+
+args: image_path: ruta a la imagen original y el detector es: es la instantcia MTCNN 
+
+NOTA: La clase/ función generate_labels_map genera el archivo labels_map.JSON, ese archivo mapea indices numericos
+a nombres de personas, es necesario para que el modelo sepa a que numero corresponde a cada persona durante
+el entrenamiento y la predicción.
+
+args: processed_dir: direcctorio con las carpetas de las personas 
+return: diccionario (indice: nombre)
+
+
+
+PASO 3: 
+(Carpeta 2: SRC/dataset) ejecutar el script dividir DataSet y el script de procesar imagenes:
+DividirDataSet: el script toma las imagenes procesadas y las divide en tres conjuntos:
+
+1:(DataSet/splits/train) Train (70%, carpeta 1) para entrenar el modelo
+
+2:(DataSet/splits/val) validation (15%) para ajustar hiperparametros y evitar el overfitting 
+(El sobreajuste ocurre cuando un modelo se ajusta demasiado perfectamente a 
+los datos de entrenamiento, memorizando ruido e irregularidades, lo que le impide generalizar y hacer predicciones
+precisas con datos nuevos y no vistos)
+
+3:(DataSet/splits/test) test: (15%), para evaluar el rendimiento final
+
+
+Para cada persona obtiene sus imagenes, las mezcla aleatoriamente y, divide según las proporciones definidas
+ y copia las carpetas correspondientes.
+-Existe una validación por si no encuentra imagenes de la persona en la carpeta. 
+
+IMPORTANTE: todo se ejecuta en el CMD 
+
+
+
+PASO 4:
+modulo de modelos para el reconocimiento facial
+En este apartado utilizamos las dos opciones que se nos daban, una red neuronal convolucional basica y otro con
+transfer learning
+En la basica: Tine 4 bloques:
+1: Capas conv2D: extrae las caracteristicas de la imagen
+2: BatchNormalization: estabiliza el entrenamiento 
+3: MaxPooling: reduce el tamaño y hace la red más robusta
+4: DropOut: Previene el overfitting "Apagando" neuronas aleatoriamente
+
+Al final hay capas dense (fully connected) para la clasificación 
+
+args: input_shape: es la forma de entrada (alto, ancho, canales)
+num_clases: numero de personas a clasificar
+ 
+return: modelo Keras 
+Keras: estructura principal para definir redes neuronales usando la biblioteca Keras 
+(una API de alto nivel para TensorFlow), permitiendo construir modelos apilando capas configurables (como Dense, Conv2D, etc.)
+
+
+OPCION: transfer_learning (Transfer learning significa usar un modelo que ya fue entrenado en
+millones de imágenes (ImageNet) y adaptarlo a nuestra tarea específica.
+Esto funciona mejor que entrenar desde cero porque el modelo
+ya "sabe" detectar características visuales generales.)
+
+
+Crea un modelo usando MobileNetV2 como base.
+    
+    MobileNetV2 es una red diseñada para ser ligera y rápida,
+    ideal para aplicaciones en tiempo real como la nuestra.
+    
+    La estrategia es:
+    1. Usar MobileNetV2 pre-entrenado como "extractor de características"
+    2. Agregar nuestras propias capas de clasificación encima
+    3. Opcionalmente, "fine-tunear" las últimas capas de la base
+    
+    Args:
+        input_shape: Tamaño de las imágenes de entrada
+        num_classes: Número de personas a clasificar
+        freeze_base: Si True, no entrenar la base (solo nuestras capas)
+        fine_tune_layers: Cuántas capas finales de la base entrenar
+        
+    Returns:
+        Modelo Keras (sin compilar)
+
+
+
+Compila el modelo para entrenamiento.
+    
+    Para transfer learning, usamos un learning rate más bajo que para
+    entrenar desde cero, así no "destruimos" lo que el modelo ya aprendió.
+    
+    Args:
+        model: Modelo Keras sin compilar
+        learning_rate: Tasa de aprendizaje (0.0001 es común para fine-tuning)
+        
+    Returns:
+        Modelo compilado
+
+
+
+PASO 5:
+(Carpeta 2 SRC/training) Modulo de entrenamiento de modelos
+OPCION 1: train_cnn: Script para entrenar la CNN básica (desde cero).
+1: Cargar configuración del dataset
+2: Crear generadores de datos
+3: Crear y compilar el modelo
+4: Configurar callbacks y entrenar
+5: Guardar resultados y evaluar
+6: RESUMEN FINAL
+    print("\n" + "=" * 60)
+    print("[SUCCESS] ENTRENAMIENTO COMPLETADO")
+    print("=" * 60)
+    print(f"Accuracy en test: {results['accuracy']*100:.2f}%")
+    print(f"Mejor val_accuracy: {max(history.history['val_accuracy'])*100:.2f}%")
+    print("=" * 60)
+
+ P 2: (Carpeta 2 SRC/training/utils_training) utilidades para el entrenamiento de modelos
+(Este módulo contiene funciones auxiliares que se usan durante
+el entrenamiento, como crear callbacks y guardar el historial.)
+//////////////////////////////////////////////////////////////////
+def create_callbacks(model_name, monitor='val_accuracy'):
+    """
+    Crea los callbacks para el entrenamiento.
+    
+    Los callbacks son funciones que Keras ejecuta automáticamente
+    durante el entrenamiento. Entiendo que son muy útiles para:
+    - Guardar el mejor modelo automáticamente
+    - Detener el entrenamiento si ya no mejora
+    - Ajustar el learning rate dinámicamente
+    
+    Args:
+        model_name: Nombre del modelo (para los archivos)
+        monitor: Métrica a monitorear (val_accuracy es buena opción)
+        
+    Returns:
+        Lista de callbacks configurados
+    """
+    callbacks = []
+/////////////////////////////////////////////////////////////////////
+1: MODEL CHECKPOINT
+    # Guarda el modelo cada vez que mejora la métrica monitoreada.
+    # Así no perdemos el mejor modelo si después empeora por overfitting.
+2: EARLY STOPPING
+    # Detiene el entrenamiento si la métrica no mejora después de N épocas.
+    # Esto evita entrenar de más y perder tiempo.
+3: REDUCE LEARNING RATE ON PLATEAU
+    # Si el modelo deja de mejorar, reduce el learning rate.
+    # A veces con pasos más pequeños el modelo puede seguir aprendiendo.
+4: CSV LOGGER
+    # Guarda las métricas de cada época en un archivo CSV (archivo tipo excel).
+    # Útil para analizar el entrenamiento después.
+////////////////////////////////////////////////////////////
+def save_model_history(history, model_name):
+    """
+    Guarda el historial de entrenamiento en un archivo JSON.
+    
+    El historial contiene las métricas (loss, accuracy) de cada época.
+    Lo guardamos para poder analizarlo o graficar después.
+    
+    Args:
+        history: Objeto History retornado por model.fit()
+        model_name: Nombre del modelo para el archivo
+---------------------------------------------------------------------------------------------------------------
+P 3: (Carpeta 2 SRC/training/utils) Modulo de utilidades del proyecto
+Contiene la clase: Utilidades para Data Augmentation (aumento de datos).
+******
+Este módulo se encarga de crear los "generadores" que
+alimentan imágenes al modelo durante el entrenamiento. El augmentation
+aplica transformaciones aleatorias a las imágenes para que el modelo
+aprenda a reconocer rostros en diferentes condiciones.
+*******
+
+1: 
+def get_train_datagen():
+    """
+    Crea un generador de datos CON augmentation para entrenamiento.
+    
+    La idea es que cada vez que el modelo ve una imagen,
+    la ve con transformaciones aleatorias diferentes, así aprende
+    a reconocer la misma persona en distintas condiciones.
+    
+    Returns:
+        ImageDataGenerator configurado con augmentation
+    """
+////////////////////////////////////////////
+2:
+def get_val_test_datagen():
+    """
+    Crea un generador de datos SIN augmentation para validación/test.
+
+    
+    Returns:
+        ImageDataGenerator solo con normalización
+///////////////////////////////////////////////////////////
+3:
+def create_data_generators(train_dir, val_dir, test_dir=None, 
+                          batch_size=32, target_size=(160, 160)):
+    """
+    Crea los tres generadores de datos (train, val, test) de una vez.
+    
+    Los generadores leen las imágenes de las carpetas y las organizan
+    automáticamente por clase (cada subcarpeta es una clase/persona).
+    
+    Args:
+        train_dir: Carpeta con datos de entrenamiento
+        val_dir: Carpeta con datos de validación
+        test_dir: Carpeta con datos de test (opcional)
+        batch_size: Cuántas imágenes procesar a la vez
+        target_size: Tamaño al que redimensionar las imágenes
+        
+    Returns:
+        Tupla (train_gen, val_gen, test_gen)
+/////////////////////////////////////////////////////
+
+
+
+
+PASO 6:
+(Carpeta 2 SRC/realtime) es el modulo de reconocimiento facial en tiempo real.
+
+Detectar_y_clasificar: este modulo combina el detector de rostros con el modelo de clasificacion para
+identificar personas en video en vivo. 
+
+Clasificador de rostros en tiempo real.
+    
+    Esta clase coordina todo el proceso:
+    1. Detectar rostros en el frame
+    2. Preprocesar cada rostro
+    3. Clasificar con el modelo entrenado
+    4. Dibujar resultados en el frame
+    	"""
+Inicializa el reconocedor.
+        
+        Args:
+            model_path: Ruta al archivo .h5 del modelo entrenado
+            labels_map_path: Ruta al labels_map.json (opcional)
+            detection_method: 'haar' o 'mtcnn'
+
+haar: algoritmo de aprendizaje automático para la detección rápida y eficiente de objetos en imágenes y videos
+mtcnn: Redes Convolucionales en Cascada Multitarea
+
+Preprocesa una imagen de rostro para el modelo.
+        
+        El modelo espera:
+        - Imagen en RGB (no BGR)
+        - Tamaño 160x160
+        - Valores normalizados entre 0 y 1
+        - Batch dimension (1, 160, 160, 3)
+        
+        Args:
+            face_img: Imagen del rostro en BGR
+            
+        Returns:
+            Array listo para model.predict()
+
+
+
+def predict(self, face_img):
+        """
+        Predice la identidad de un rostro.
+        
+        Args:
+            face_img: Imagen del rostro en BGR
+            
+        Returns:
+            Tupla (nombre_persona, confianza) o (None, confianza) si
+            la confianza es menor al umbral
+
+
+def process_frame(self, frame):
+        """
+        Procesa un frame completo: detecta y clasifica todos los rostros.
+        
+        Args:
+            frame: Frame de video en BGR
+            
+        Returns:
+            Frame con bounding boxes y etiquetas dibujados
+        """
+-------------------------------------------------------------------------------
+Clase detector_rostro:
+Detector de rostros usando OpenCV (libreria de python) o MTCNN.
+
+Este módulo se encarga de encontrar rostros en imágenes o video.
+Ofrece dos métodos:
+- Haar Cascades: más rápido pero menos preciso
+- MTCNN: más preciso pero más lento
+
+Para tiempo real Haar es mejor opción, pero MTCNN
+detecta mejor rostros en ángulos difíciles.
+"""
+/////////////////////////////////////////
+class FaceDetector:
+    """
+    Clase para detectar y extraer rostros de imágenes.
+    
+    Encapsula la lógica de detección para que sea fácil
+    cambiar entre métodos sin modificar el resto del código.
+    """
+//////////////////////////////////
+def detect_faces(self, frame):
+        """
+        Detecta todos los rostros en un frame.
+        
+        Args:
+            frame: Imagen en formato BGR (como la lee OpenCV)
+            
+        Returns:
+            Lista de tuplas (x, y, ancho, alto) con las coordenadas
+            de cada rostro detectado
+
+////////////////////////////////
+def extract_face(self, frame, face_box, target_size=(160, 160)):
+        """
+        Extrae y preprocesa un rostro del frame.
+        
+        Recorta la región del rostro y la redimensiona al tamaño
+        que espera nuestro modelo de clasificación.
+        
+        Args:
+            frame: Imagen completa
+            face_box: Tupla (x, y, ancho, alto) del rostro
+            target_size: Tamaño de salida deseado
+            
+        Returns:
+            Imagen del rostro recortada y redimensionada, o None si falla
+        """
+        x, y, w, h = face_box
+
+-----------------------------------------------------------------------------
+Clase: UI_Visualitation
+Interfaz de visualización para reconocimiento facial en tiempo real.
+
+- Usar la webcam en vivo
+- Procesar archivos de video
+- Procesar imágenes estáticas
+////////////////////////////
+class FaceRecognitionApp:
+    """
+    Aplicación principal de reconocimiento facial.
+    
+    Esta clase maneja la interfaz gráfica y la captura de video,
+    delegando el procesamiento al RealTimeFaceRecognizer.
+    """
+//////////////////////////////////////
+def _init_(self, model_path, labels_map_path=None, detection_method='haar'):
+        """
+        Inicializa la aplicación.
+        
+        Args:
+            model_path: Ruta al modelo entrenado (.h5)
+            labels_map_path: Ruta al labels_map.json
+            detection_method: 'haar' (rápido) o 'mtcnn' (preciso)
+///////////////////////////////////////////////////////////////////
+def start(self, camera_index=0, window_name="Reconocimiento Facial"):
+        """
+        Inicia el reconocimiento facial con la webcam.
+        
+        Args:
+            camera_index: Índice de la cámara (0 = cámara principal)
+            window_name: Título de la ventana
+        """
+////////////////////////////////////////////////////////
+# Abrir la cámara
+        self.cap = cv2.VideoCapture(camera_index)
+        
+        if not self.cap.isOpened():
+            print(f"[ERROR] No se pudo abrir la cámara {camera_index}")
+            return
+        
+        print("[INFO] Presiona 'q' para salir")
+        print("[INFO] Presiona 's' para guardar screenshot")
+/////////////////////////////////////////////////////////////
+# Abrir la cámara
+        self.cap = cv2.VideoCapture(camera_index)
+        
+        if not self.cap.isOpened():
+            print(f"[ERROR] No se pudo abrir la cámara {camera_index}")
+            return
+        
+        print("[INFO] Presiona 'q' para salir")
+        print("[INFO] Presiona 's' para guardar screenshot")
+////////////////////////////////////////////////////////////
+
+
+PASO 7: 
+(Carpeta 4 App) Contiene las clases main.py (ejecución total)
+ y la clase webcam :
+Interfaz simplificada para usar con webcam.
+
+Este script es un atajo rápido para iniciar el reconocimiento
+facial sin tener que escribir argumentos. Solo ejecuta:
+    python webcam_interface.py
